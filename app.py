@@ -4,6 +4,8 @@ Bird Sound Classification API Service
 
 A Flask-based REST API for bird sound classification using the trained model.
 Designed to be deployed and queried from external applications.
+
+Version: 2.1.0 - Fixed from_config method and enhanced debugging
 """
 
 import os
@@ -21,6 +23,11 @@ from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 import warnings
+
+# Print version info for deployment tracking
+API_VERSION = "2.1.0"
+print(f"🚀 Bird Sound Classification API v{API_VERSION}")
+print(f"📅 Deployment timestamp: {time.strftime('%Y-%m-%d %H:%M:%S UTC')}")
 
 # Suppress warnings and TensorFlow logs
 warnings.filterwarnings("ignore")
@@ -151,20 +158,72 @@ def load_model():
         raise FileNotFoundError(f"Model not found at: {Config.MODEL_PATH}")
     
     print(f"Loading model from: {Config.MODEL_PATH}")
+    print(f"Model file size: {os.path.getsize(Config.MODEL_PATH) / (1024*1024):.1f} MB")
     
-    try:
-        model = tf.keras.models.load_model(
-            Config.MODEL_PATH,
-            custom_objects={
-                'BirdClassifier': BirdClassifier,
-                'YamnetFeaturesLayer': features_lib.YamnetFeaturesLayer
-            }
-        )
-        print("✅ Model loaded successfully!")
-        return True
-    except Exception as e:
-        print(f"❌ Error loading model: {e}")
-        return False
+    # Try multiple loading approaches
+    approaches = [
+        ("Standard load_model", "standard"),
+        ("Load with compile=False", "no_compile"),
+        ("Recreate and load weights", "recreate")
+    ]
+    
+    for approach_name, approach_type in approaches:
+        print(f"🔄 Trying {approach_name}...")
+        try:
+            if approach_type == "standard":
+                model = tf.keras.models.load_model(
+                    Config.MODEL_PATH,
+                    custom_objects={
+                        'BirdClassifier': BirdClassifier,
+                        'YamnetFeaturesLayer': features_lib.YamnetFeaturesLayer
+                    }
+                )
+            elif approach_type == "no_compile":
+                model = tf.keras.models.load_model(
+                    Config.MODEL_PATH,
+                    custom_objects={
+                        'BirdClassifier': BirdClassifier,
+                        'YamnetFeaturesLayer': features_lib.YamnetFeaturesLayer
+                    },
+                    compile=False
+                )
+            elif approach_type == "recreate":
+                # Try to recreate model and load weights
+                print("   Creating new model instance...")
+                yamnet_weights_path = os.path.join(Config.YAMNET_PATH, "yamnet.h5")
+                model = BirdClassifier(
+                    num_classes=50,  # Known from our dataset
+                    yamnet_weights_path_arg=yamnet_weights_path,
+                    yamnet_trainable=False  # Set to False for inference
+                )
+                # Build the model with correct input shape
+                dummy_input = tf.zeros((1, Config.EXPECTED_SAMPLES))
+                _ = model(dummy_input, training=False)
+                print("   Loading saved weights...")
+                model.load_weights(Config.MODEL_PATH)
+            
+            print(f"✅ Model loaded successfully using {approach_name}!")
+            
+            # Test the model with a dummy input
+            print("🧪 Testing model with dummy input...")
+            dummy_input = tf.zeros((1, Config.EXPECTED_SAMPLES))
+            dummy_output = model(dummy_input, training=False)
+            print(f"   Output shape: {dummy_output.shape}")
+            print(f"   Output sum: {tf.reduce_sum(dummy_output).numpy():.6f}")
+            
+            return True
+            
+        except Exception as e:
+            print(f"❌ {approach_name} failed: {e}")
+            print(f"   Error type: {type(e).__name__}")
+            if "str" in str(e) and "name" in str(e):
+                print("   This is the 'str' object error - continuing to next approach...")
+                traceback.print_exc()
+            model = None
+            continue
+    
+    print("❌ All model loading approaches failed")
+    return False
 
 def load_species_data():
     """Load species mapping"""
@@ -415,8 +474,8 @@ def internal_error(e):
 
 def initialize_app():
     """Initialize the application"""
-    print("🦅 Bird Sound Classification API")
-    print("=" * 40)
+    print(f"🦅 Bird Sound Classification API v{API_VERSION}")
+    print("=" * 50)
     
     # Load model
     if not load_model():
@@ -428,7 +487,7 @@ def initialize_app():
         print("❌ Failed to load species data")
         return False
     
-    print(f"✅ API initialized successfully!")
+    print(f"✅ API v{API_VERSION} initialized successfully!")
     print(f"   Model: {Config.MODEL_PATH}")
     print(f"   Species: {len(species_list)} supported")
     return True
