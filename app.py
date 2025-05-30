@@ -5,7 +5,7 @@ Bird Sound Classification API Service
 A Flask-based REST API for bird sound classification using the trained model.
 Designed to be deployed and queried from external applications.
 
-Version: 2.1.1 - Fixed mixed precision policy issues for production deployment
+Version: 2.1.2 - Enhanced model weight tracking and robust loading fixes
 """
 
 import os
@@ -25,7 +25,7 @@ from werkzeug.utils import secure_filename
 import warnings
 
 # Print version info for deployment tracking
-API_VERSION = "2.1.1"
+API_VERSION = "2.1.2"
 print(f"🚀 Bird Sound Classification API v{API_VERSION}")
 print(f"📅 Deployment timestamp: {time.strftime('%Y-%m-%d %H:%M:%S UTC')}")
 
@@ -165,18 +165,29 @@ class BirdClassifier(tf.keras.Model):
 
 # Global variables for model and species mapping
 model = None
+model_weights_ok = False  # Track if weights were loaded successfully
 species_list = []
 species_mapping = {}
 
 def load_model():
     """Load the trained model with enhanced error handling for production deployment"""
-    global model
+    global model, model_weights_ok
     
     if not os.path.exists(Config.MODEL_PATH):
         raise FileNotFoundError(f"Model not found at: {Config.MODEL_PATH}")
     
     print(f"Loading model from: {Config.MODEL_PATH}")
     print(f"Model file size: {os.path.getsize(Config.MODEL_PATH) / (1024*1024):.1f} MB")
+    
+    # Initialize flags
+    model = None
+    model_weights_ok = False
+    
+    # Defensively get YamnetFeaturesLayer to avoid AttributeError
+    yamnet_features_layer = getattr(features_lib, 'YamnetFeaturesLayer', None)
+    custom_objects = {'BirdClassifier': BirdClassifier}
+    if yamnet_features_layer is not None:
+        custom_objects['YamnetFeaturesLayer'] = yamnet_features_layer
     
     # Strategy 1: Try loading with explicit policy management
     print("🔄 Trying load with explicit policy management...")
@@ -188,14 +199,12 @@ def load_model():
         with tf.keras.mixed_precision.policy_scope('float32'):
             model = tf.keras.models.load_model(
                 Config.MODEL_PATH,
-                custom_objects={
-                    'BirdClassifier': BirdClassifier,
-                    'YamnetFeaturesLayer': features_lib.YamnetFeaturesLayer
-                },
+                custom_objects=custom_objects,
                 compile=False  # Skip compilation to avoid policy issues
             )
             
             print("✅ Model loaded successfully with explicit policy management!")
+            model_weights_ok = True  # Weights loaded with the model
             
             # Test the model
             print("🧪 Testing model with dummy input...")
@@ -211,6 +220,7 @@ def load_model():
         if "str" in str(e) and "name" in str(e):
             print("   This is the mixed precision 'str' object error")
         model = None
+        model_weights_ok = False
     
     # Strategy 2: Try simple load without custom objects or compilation
     print("🔄 Trying simple load (no custom objects, no compilation)...")
@@ -222,6 +232,7 @@ def load_model():
             model = tf.keras.models.load_model(Config.MODEL_PATH, compile=False)
             
             print("✅ Simple load successful!")
+            model_weights_ok = True  # Weights loaded with the model
             
             # Test the model
             print("🧪 Testing simple loaded model...")
@@ -235,6 +246,7 @@ def load_model():
     except Exception as e:
         print(f"❌ Simple load failed: {e}")
         model = None
+        model_weights_ok = False
     
     # Strategy 3: Manual model recreation with weights loading
     print("🔄 Trying manual model recreation...")
@@ -261,8 +273,12 @@ def load_model():
             
             # Load only the weights from the saved model
             try:
-                # Load model architecture and get weights without custom objects
-                temp_model = tf.keras.models.load_model(Config.MODEL_PATH, compile=False)
+                # Load model architecture and get weights WITH custom objects
+                temp_model = tf.keras.models.load_model(
+                    Config.MODEL_PATH, 
+                    custom_objects=custom_objects,
+                    compile=False
+                )
                 
                 # Get the weights from the BirdClassifier layer if it exists
                 weights_loaded = False
@@ -301,6 +317,7 @@ def load_model():
                 
                 if weights_loaded:
                     print("✅ Model recreation with weights successful!")
+                    model_weights_ok = True  # Weights successfully loaded
                     
                     # Test the model
                     print("🧪 Testing recreated model...")
@@ -311,17 +328,19 @@ def load_model():
                     return True
                 else:
                     print("⚠️ Model created but no weights loaded - using random weights")
-                    return True  # Still usable, though not ideal
+                    model_weights_ok = False  # No weights loaded
+                    return True  # Model structure exists but no proper weights
                     
             except Exception as weight_error:
                 print(f"   ❌ Weight loading failed: {weight_error}")
-                # Still return True as we have a working model, just with random weights
                 print("   ⚠️ Using model with initialized weights (emergency fallback)")
-                return True
+                model_weights_ok = False  # No weights loaded
+                return True  # Model structure exists but no proper weights
                 
     except Exception as e:
         print(f"❌ Manual model recreation failed: {e}")
         model = None
+        model_weights_ok = False
     
     # Strategy 4: Emergency fallback - create a functioning model with random weights
     print("🔄 Emergency fallback: Creating model with random weights...")
@@ -342,12 +361,14 @@ def load_model():
             
             print("⚠️ Emergency fallback model created (random weights)")
             print("⚠️ This model will give random predictions but the API will function")
+            model_weights_ok = False  # Explicitly mark weights as not loaded
             
             return True
             
     except Exception as e:
         print(f"❌ Emergency fallback failed: {e}")
         model = None
+        model_weights_ok = False
     
     print("❌ All model loading strategies failed")
     return False
@@ -433,6 +454,7 @@ def health():
     return jsonify({
         'status': 'healthy',
         'model_loaded': model is not None,
+        'model_weights_ok': model_weights_ok,
         'species_count': len(species_list),
         'timestamp': time.time()
     })
@@ -454,6 +476,13 @@ def predict():
         # Check if model is loaded
         if model is None:
             return jsonify({'error': 'Model not loaded'}), 500
+        
+        # Check if model weights are properly loaded
+        if not model_weights_ok:
+            return jsonify({
+                'error': 'Model weights not loaded properly - predictions would be random',
+                'details': 'The model structure exists but weights were not loaded successfully'
+            }), 500
         
         # Check if file was uploaded
         if 'audio' not in request.files:
@@ -530,6 +559,17 @@ def predict():
 def predict_url():
     """Predict from audio URL (for remote files)"""
     try:
+        # Check if model is loaded
+        if model is None:
+            return jsonify({'error': 'Model not loaded'}), 500
+        
+        # Check if model weights are properly loaded
+        if not model_weights_ok:
+            return jsonify({
+                'error': 'Model weights not loaded properly - predictions would be random',
+                'details': 'The model structure exists but weights were not loaded successfully'
+            }), 500
+        
         data = request.get_json()
         if not data or 'url' not in data:
             return jsonify({'error': 'No URL provided'}), 400
