@@ -5,7 +5,7 @@ Bird Sound Classification API Service
 A Flask-based REST API for bird sound classification using the trained model.
 Designed to be deployed and queried from external applications.
 
-Version: 2.1.2 - Enhanced model weight tracking and robust loading fixes
+Version: 2.1.3 - Fixed TensorFlow version compatibility for policy_scope
 """
 
 import os
@@ -25,7 +25,7 @@ from werkzeug.utils import secure_filename
 import warnings
 
 # Print version info for deployment tracking
-API_VERSION = "2.1.2"
+API_VERSION = "2.1.3"
 print(f"🚀 Bird Sound Classification API v{API_VERSION}")
 print(f"📅 Deployment timestamp: {time.strftime('%Y-%m-%d %H:%M:%S UTC')}")
 
@@ -51,6 +51,10 @@ try:
     
 except Exception as e:
     print(f"   ⚠️ Could not set mixed precision policy: {e}")
+
+# Check if policy_scope is available (version compatibility)
+HAS_POLICY_SCOPE = hasattr(tf.keras.mixed_precision, 'policy_scope')
+print(f"🔧 TensorFlow policy_scope available: {HAS_POLICY_SCOPE}")
 
 # Configuration
 class Config:
@@ -189,14 +193,23 @@ def load_model():
     if yamnet_features_layer is not None:
         custom_objects['YamnetFeaturesLayer'] = yamnet_features_layer
     
+    def safe_policy_context():
+        """Context manager that works with or without policy_scope"""
+        if HAS_POLICY_SCOPE:
+            return tf.keras.mixed_precision.policy_scope('float32')
+        else:
+            # Fallback: use a dummy context manager
+            from contextlib import nullcontext
+            return nullcontext()
+    
     # Strategy 1: Try loading with explicit policy management
     print("🔄 Trying load with explicit policy management...")
     try:
         # Clear session and set policy again
         tf.keras.backend.clear_session()
         
-        # Force float32 policy context
-        with tf.keras.mixed_precision.policy_scope('float32'):
+        # Force float32 policy context (version-safe)
+        with safe_policy_context():
             model = tf.keras.models.load_model(
                 Config.MODEL_PATH,
                 custom_objects=custom_objects,
@@ -227,8 +240,8 @@ def load_model():
     try:
         tf.keras.backend.clear_session()
         
-        # Try to load as a basic Keras model
-        with tf.keras.mixed_precision.policy_scope('float32'):
+        # Try to load as a basic Keras model (version-safe)
+        with safe_policy_context():
             model = tf.keras.models.load_model(Config.MODEL_PATH, compile=False)
             
             print("✅ Simple load successful!")
@@ -254,8 +267,8 @@ def load_model():
         # Clear session completely
         tf.keras.backend.clear_session()
         
-        # Force explicit float32 context
-        with tf.keras.mixed_precision.policy_scope('float32'):
+        # Force explicit float32 context (version-safe)
+        with safe_policy_context():
             # Create new model instance
             yamnet_weights_path = os.path.join(Config.YAMNET_PATH, "yamnet.h5")
             model = BirdClassifier(
@@ -347,7 +360,7 @@ def load_model():
     try:
         tf.keras.backend.clear_session()
         
-        with tf.keras.mixed_precision.policy_scope('float32'):
+        with safe_policy_context():
             yamnet_weights_path = os.path.join(Config.YAMNET_PATH, "yamnet.h5")
             model = BirdClassifier(
                 num_classes=50,
