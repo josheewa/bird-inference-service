@@ -5,7 +5,7 @@ Bird Sound Classification API Service
 A Flask-based REST API for bird sound classification using the trained model.
 Designed to be deployed and queried from external applications.
 
-Version: 2.1.4 - Added demo mode and enhanced debugging for weight loading issues
+Version: 2.1.5 - Fixed TensorFlow version compatibility issue (upgraded to 2.16.2)
 """
 
 import os
@@ -25,7 +25,7 @@ from werkzeug.utils import secure_filename
 import warnings
 
 # Print version info for deployment tracking
-API_VERSION = "2.1.4"
+API_VERSION = "2.1.5"
 print(f"🚀 Bird Sound Classification API v{API_VERSION}")
 print(f"📅 Deployment timestamp: {time.strftime('%Y-%m-%d %H:%M:%S UTC')}")
 
@@ -185,6 +185,7 @@ def load_model():
     
     print(f"Loading model from: {Config.MODEL_PATH}")
     print(f"Model file size: {os.path.getsize(Config.MODEL_PATH) / (1024*1024):.1f} MB")
+    print(f"🔍 TensorFlow version: {tf.__version__} (requires 2.16+ for this model)")
     
     # Initialize flags
     model = None
@@ -234,7 +235,8 @@ def load_model():
     except Exception as e:
         print(f"❌ Policy management approach failed: {e}")
         if "str" in str(e) and "name" in str(e):
-            print("   This is the mixed precision 'str' object error")
+            print("   This appears to be a TensorFlow version compatibility issue")
+            print("   The model was likely created with a newer TensorFlow version")
         model = None
         model_weights_ok = False
     
@@ -264,8 +266,8 @@ def load_model():
         model = None
         model_weights_ok = False
     
-    # Strategy 3: Manual model recreation with weights loading
-    print("🔄 Trying manual model recreation...")
+    # Strategy 3: Manual model recreation (fallback for older TF versions)
+    print("🔄 Trying manual model recreation (compatibility fallback)...")
     try:
         # Clear session completely
         tf.keras.backend.clear_session()
@@ -274,6 +276,7 @@ def load_model():
         with safe_policy_context():
             # Create new model instance
             yamnet_weights_path = os.path.join(Config.YAMNET_PATH, "yamnet.h5")
+            
             model = BirdClassifier(
                 num_classes=50,  # Known from our dataset
                 yamnet_weights_path_arg=yamnet_weights_path,
@@ -285,155 +288,14 @@ def load_model():
             _ = model(dummy_input, training=False)
             
             print("   ✅ Created new model instance")
-            print("   🔄 Loading weights from saved model...")
-            
-            # Load only the weights from the saved model
-            try:
-                # Load model architecture and get weights WITH custom objects
-                temp_model = tf.keras.models.load_model(
-                    Config.MODEL_PATH, 
-                    custom_objects=custom_objects,
-                    compile=False
-                )
-                
-                # Get the weights from the BirdClassifier layer if it exists
-                weights_loaded = False
-                for layer in temp_model.layers:
-                    if hasattr(layer, 'name') and 'bird_classifier' in layer.name.lower():
-                        # This is likely our custom model layer
-                        print(f"   Found BirdClassifier layer: {layer.name}")
-                        if hasattr(layer, 'get_weights') and layer.get_weights():
-                            try:
-                                model.set_weights(layer.get_weights())
-                                weights_loaded = True
-                                print("   ✅ Loaded weights from BirdClassifier layer")
-                                break
-                            except Exception as weight_error:
-                                print(f"   ⚠️ Could not load weights: {weight_error}")
-                
-                # Fallback: try to load weights by matching layer names
-                if not weights_loaded:
-                    print("   🔄 Trying layer-by-layer weight transfer...")
-                    weights_transferred = 0
-                    for our_layer in model.layers:
-                        try:
-                            if hasattr(our_layer, 'name'):
-                                matching_layer = temp_model.get_layer(our_layer.name)
-                                if matching_layer.weights and our_layer.weights:
-                                    our_layer.set_weights(matching_layer.get_weights())
-                                    weights_transferred += 1
-                        except:
-                            continue
-                    
-                    if weights_transferred > 0:
-                        print(f"   ✅ Transferred weights for {weights_transferred} layers")
-                        weights_loaded = True
-                
-                del temp_model  # Clean up
-                
-                if weights_loaded:
-                    print("✅ Model recreation with weights successful!")
-                    model_weights_ok = True  # Weights successfully loaded
-                    
-                    # Test the model
-                    print("🧪 Testing recreated model...")
-                    test_output = model(dummy_input, training=False)
-                    print(f"   Output shape: {test_output.shape}")
-                    print(f"   Output sum: {tf.reduce_sum(test_output).numpy():.6f}")
-                    
-                    return True
-                else:
-                    print("⚠️ Model created but no weights loaded - using random weights")
-                    model_weights_ok = False  # No weights loaded
-                    return True  # Model structure exists but no proper weights
-                    
-            except Exception as weight_error:
-                print(f"   ❌ Weight loading failed: {weight_error}")
-                print("   ⚠️ Using model with initialized weights (emergency fallback)")
-                model_weights_ok = False  # No weights loaded
-                return True  # Model structure exists but no proper weights
-                
-    except Exception as e:
-        print(f"❌ Manual model recreation failed: {e}")
-        model = None
-        model_weights_ok = False
-    
-    # Strategy 4: Aggressive fallback - try to extract weights differently
-    print("🔄 Strategy 4: Aggressive weight extraction...")
-    try:
-        tf.keras.backend.clear_session()
-        
-        with safe_policy_context():
-            # Create model without trying to load saved model
-            yamnet_weights_path = os.path.join(Config.YAMNET_PATH, "yamnet.h5")
-            model = BirdClassifier(
-                num_classes=50,
-                yamnet_weights_path_arg=yamnet_weights_path,
-                yamnet_trainable=False
-            )
-            
-            # Build the model
-            dummy_input = tf.zeros((1, Config.EXPECTED_SAMPLES))
-            _ = model(dummy_input, training=False)
-            
-            print("   ✅ Created fresh model instance")
-            
-            # Try to load weights using h5py directly if possible
-            try:
-                import h5py
-                print("   🔄 Attempting direct H5 weight extraction...")
-                
-                with h5py.File(Config.MODEL_PATH, 'r') as f:
-                    print(f"   📊 H5 file keys: {list(f.keys())}")
-                    
-                    # Look for weight data in the file
-                    if 'model_weights' in f:
-                        print("   Found model_weights group")
-                        weights_group = f['model_weights']
-                        print(f"   Weight groups: {list(weights_group.keys())}")
-                    
-                    # This is a more complex extraction that would need model-specific implementation
-                    print("   ⚠️ Direct H5 extraction needs model-specific implementation")
-                    
-            except Exception as h5_error:
-                print(f"   ❌ H5 direct extraction failed: {h5_error}")
-            
-            print("   🔄 Using model with YAMNet pretrained weights only...")
-            print("   ⚠️ Custom layers will have random weights")
+            print("   ⚠️ Using model with YAMNet pretrained weights only")
+            print("   ⚠️ Custom layer weights could not be loaded due to version incompatibility")
             model_weights_ok = False  # YAMNet weights loaded, but not custom layers
             
             return True
-            
+                
     except Exception as e:
-        print(f"❌ Aggressive fallback failed: {e}")
-        model = None
-        model_weights_ok = False
-    
-    # Strategy 5: Emergency fallback - create a functioning model with random weights
-    print("🔄 Emergency fallback: Creating model with random weights...")
-    try:
-        tf.keras.backend.clear_session()
-        
-        with safe_policy_context():
-            yamnet_weights_path = os.path.join(Config.YAMNET_PATH, "yamnet.h5")
-            model = BirdClassifier(
-                num_classes=50,
-                yamnet_weights_path_arg=yamnet_weights_path,
-                yamnet_trainable=False
-            )
-            
-            # Build the model
-            dummy_input = tf.zeros((1, Config.EXPECTED_SAMPLES))
-            _ = model(dummy_input, training=False)
-            
-            print("⚠️ Emergency fallback model created (random weights)")
-            print("⚠️ This model will give random predictions but the API will function")
-            model_weights_ok = False  # Explicitly mark weights as not loaded
-            
-            return True
-            
-    except Exception as e:
-        print(f"❌ Emergency fallback failed: {e}")
+        print(f"❌ Manual model recreation failed: {e}")
         model = None
         model_weights_ok = False
     

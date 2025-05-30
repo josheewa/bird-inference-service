@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: bird-inference-service
+    env: python
+    plan: free
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --timeout 300 --worker-class sync --max-requests 1000 --max-requests-jitter 50 --preload
+    envVars:
+      - key: PYTHONPATH
+        value: /opt/render/project/src
+      - key: TF_CPP_MIN_LOG_LEVEL
+        value: "2"
+      - key: DEMO_MODE
+        value: "false"
+    buildFilter:
+      paths:
+      - requirements.txt
+      - app.py
+      - yamnet/**
+      - best_model.keras
+      - species.json
+      ignoredPaths:
+      - README.md
+      - deploy.md
+      - .gitignore 
