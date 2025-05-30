@@ -1,92 +1,74 @@
+---
+title: Bird Sound Classification API
+emoji: 🦅
+colorFrom: green
+colorTo: blue
+sdk: docker
+pinned: false
+license: mit
+app_port: 7860
+---
+
 # 🦅 Bird Sound Classification API
 
-A Flask-based REST API for bird sound classification using a trained YAMNet + GRU model.
+A Flask-based REST API for bird sound classification using YAMNet + GRU ensemble model.
 
 ## Features
 
-- **50 Bird Species** supported for classification
-- **Real-time inference** (~60ms per prediction)
-- **Multiple audio formats** (WAV, MP3, FLAC, OGG, M4A, WebM)
-- **File upload or URL-based** prediction
-- **Web interface** for testing
-- **Production ready** with Gunicorn support
-
-## Model Performance
-
-- **Model:** YAMNet feature extractor + GRU classifier
-- **Training Data:** eBird audio segments
-- **Accuracy:** 94% validation accuracy
-- **Inference Speed:** ~60ms average, ~17 inferences/second
-- **Model Size:** 4.9M parameters
-
-## Quick Start
-
-### 1. Install Dependencies
-
-```bash
-cd archive_94/api_service
-pip install -r requirements.txt
-```
-
-### 2. Start the API
-
-```bash
-python run.py
-```
-
-The API will be available at `http://localhost:5000`
-
-### 3. Test the API
-
-Visit `http://localhost:5000` for the web interface, or use curl:
-
-```bash
-# Health check
-curl http://localhost:5000/health
-
-# Upload audio file
-curl -X POST -F "audio=@bird_sound.wav" http://localhost:5000/predict
-
-# Predict from URL
-curl -X POST \
-  -H "Content-Type: application/json" \
-  -d '{"url":"https://example.com/bird_audio.wav"}' \
-  http://localhost:5000/predict_url
-```
+- **50 Bird Species Classification**: Trained on eBird audio data
+- **YAMNet Backbone**: Google's audio classification model
+- **REST API**: Easy integration with other applications
+- **Audio Format Support**: WAV, MP3, FLAC, OGG, M4A, WebM
 
 ## API Endpoints
 
-### `GET /health`
-Health check endpoint
+### GET `/health`
+Check API health and model status
 
-**Response:**
-```json
-{
-  "status": "healthy",
-  "model_loaded": true,
-  "species_count": 50,
-  "timestamp": 1648592315.123
-}
+### GET `/species` 
+Get list of all 50 supported bird species
+
+### POST `/predict`
+Upload audio file for bird species prediction
+- **Body**: `multipart/form-data` with `audio` file
+- **Response**: Top 5 predictions with confidence scores
+
+### POST `/predict_url`
+Predict from remote audio URL
+- **Body**: `{"url": "https://example.com/audio.wav"}`
+- **Response**: Top 5 predictions with confidence scores
+
+## Usage
+
+### Web Interface
+Visit the deployed app URL to use the interactive web interface.
+
+### API Usage
+```bash
+# Health check
+curl https://your-space-url/health
+
+# Get supported species
+curl https://your-space-url/species
+
+# Predict from file
+curl -X POST -F "audio=@bird_sound.wav" https://your-space-url/predict
+
+# Predict from URL
+curl -X POST -H "Content-Type: application/json" \
+     -d '{"url":"https://example.com/bird.wav"}' \
+     https://your-space-url/predict_url
 ```
 
-### `GET /species`
-Get list of supported species
+## Model Details
 
-**Response:**
-```json
-{
-  "species": ["Northern Cardinal", "American Robin", ...],
-  "count": 50
-}
-```
+- **Architecture**: YAMNet + GRU (256 units) + Dense layers
+- **Input**: 5-second audio segments at 16kHz
+- **Output**: Softmax probabilities for 50 bird species
+- **Model Size**: 56.1 MB
 
-### `POST /predict`
-Upload audio file for prediction
+## Response Format
 
-**Parameters:**
-- `audio` (file): Audio file (max 50MB)
-
-**Response:**
 ```json
 {
   "success": true,
@@ -106,18 +88,6 @@ Upload audio file for prediction
   }
 }
 ```
-
-### `POST /predict_url`
-Predict from remote audio URL
-
-**Body:**
-```json
-{
-  "url": "https://example.com/bird_audio.wav"
-}
-```
-
-**Response:** Same as `/predict`
 
 ## Supported Species
 

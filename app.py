@@ -23,6 +23,7 @@ from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 import warnings
+import gc
 
 # Print version info for deployment tracking
 API_VERSION = "2.1.5"
@@ -36,6 +37,11 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 # Fix mixed precision policy issue for production deployment
 print("🔧 Setting up TensorFlow mixed precision policy...")
+
+# Memory optimization for limited environments
+tf.config.threading.set_intra_op_parallelism_threads(1)
+tf.config.threading.set_inter_op_parallelism_threads(1)
+
 try:
     # Clear any existing policy first
     tf.keras.backend.clear_session()
@@ -51,6 +57,9 @@ try:
     
 except Exception as e:
     print(f"   ⚠️ Could not set mixed precision policy: {e}")
+
+# Force garbage collection
+gc.collect()
 
 # Check if policy_scope is available (version compatibility)
 HAS_POLICY_SCOPE = hasattr(tf.keras.mixed_precision, 'policy_scope')
@@ -629,8 +638,8 @@ if __name__ == '__main__':
         print("   POST /predict_url - Predict from audio URL")
         print("")
         
-        # For Render deployment, use the PORT environment variable
-        port = int(os.environ.get('PORT', 5000))
+        # For Hugging Face Spaces, use port 7860, otherwise use environment PORT
+        port = int(os.environ.get('PORT', 7860))
         
         app.run(
             host='0.0.0.0',
