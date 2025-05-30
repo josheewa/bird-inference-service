@@ -115,6 +115,29 @@ class BirdClassifier(tf.keras.Model):
         })
         return config
 
+    @classmethod
+    def from_config(cls, config):
+        # Extract custom arguments
+        custom_args_keys = ['num_classes', 'yamnet_weights_path_arg', 'yamnet_trainable', 
+                           'gru_units', 'dense_units', 'dropout_rate', 'l2_reg']
+        custom_args = {}
+        remaining_config = {}
+        
+        for key, value in config.items():
+            if key in custom_args_keys:
+                custom_args[key] = value
+            else:
+                remaining_config[key] = value
+        
+        # Handle yamnet weights path
+        saved_weights_basename = custom_args.pop('yamnet_weights_path_arg', None)
+        if saved_weights_basename:
+            custom_args['yamnet_weights_path_arg'] = os.path.join(Config.YAMNET_PATH, "yamnet.h5")
+        else:
+            custom_args['yamnet_weights_path_arg'] = os.path.join(Config.YAMNET_PATH, "yamnet.h5")
+        
+        return cls(**custom_args, **remaining_config)
+
 # Global variables for model and species mapping
 model = None
 species_list = []
