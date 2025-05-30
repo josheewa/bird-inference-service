@@ -1,0 +1,202 @@
+[
+  {
+      "name": "Northern Cardinal",
+      "query": "cardinalis cardinalis"
+  },
+  {
+      "name": "American Robin",
+      "query": "turdus migratorius"
+  },
+  {
+      "name": "Mourning Dove",
+      "query": "zenaida macroura"
+  },
+  {
+      "name": "Blue Jay",
+      "query": "cyanocitta cristata"
+  },
+  {
+      "name": "Carolina Chickadee",
+      "query": "poecile carolinensis"
+  },
+  {
+      "name": "Tufted Titmouse",
+      "query": "baeolophus bicolor"
+  },
+  {
+      "name": "Carolina Wren",
+      "query": "thryothorus ludovicianus"
+  },
+  {
+      "name": "House Finch",
+      "query": "haemorhous mexicanus"
+  },
+  {
+      "name": "American Goldfinch",
+      "query": "spinus tristis"
+  },
+  {
+      "name": "Northern Mockingbird",
+      "query": "mimus polyglottos"
+  },
+  {
+      "name": "Eastern Bluebird",
+      "query": "sialia sialis"
+  },
+  {
+      "name": "Downy Woodpecker",
+      "query": "dryobates pubescens"
+  },
+  {
+      "name": "Red-bellied Woodpecker",
+      "query": "melanerpes carolinus"
+  },
+  {
+      "name": "White-breasted Nuthatch",
+      "query": "sitta carolinensis"
+  },
+  {
+      "name": "Gray Catbird",
+      "query": "dumetella carolinensis"
+  },
+  {
+      "name": "Red-tailed Hawk",
+      "query": "buteo jamaicensis"
+  },
+  {
+      "name": "Black-capped Chickadee",
+      "query": "poecile atricapillus"
+  },
+  {
+      "name": "Great Horned Owl",
+      "query": "bubo virginianus"
+  },
+  {
+      "name": "Red-winged Blackbird",
+      "query": "agelaius phoeniceus"
+  },
+  {
+      "name": "Common Grackle",
+      "query": "quiscalus quiscula"
+  },
+  {
+      "name": "Brown-headed Cowbird",
+      "query": "molothrus ater"
+  },
+  {
+      "name": "Song Sparrow",
+      "query": "melospiza melodia"
+  },
+  {
+      "name": "Chipping Sparrow",
+      "query": "spizella passerina"
+  },
+  {
+      "name": "White-throated Sparrow",
+      "query": "zonotrichia albicollis"
+  },
+  {
+      "name": "Dark-eyed Junco",
+      "query": "junco hyemalis"
+  },
+  {
+      "name": "American Crow",
+      "query": "corvus brachyrhynchos"
+  },
+  {
+      "name": "Turkey Vulture",
+      "query": "cathartes aura"
+  },
+  {
+      "name": "Mallard",
+      "query": "anas platyrhynchos"
+  },
+  {
+      "name": "Canada Goose",
+      "query": "branta canadensis"
+  },
+  {
+      "name": "Great Blue Heron",
+      "query": "ardea herodias"
+  },
+  {
+      "name": "House Sparrow",
+      "query": "passer domesticus"
+  },
+  {
+      "name": "European Starling",
+      "query": "sturnus vulgaris"
+  },
+  {
+      "name": "Yellow-rumped Warbler",
+      "query": "setophaga coronata"
+  },
+  {
+      "name": "Common Yellowthroat",
+      "query": "geothlypis trichas"
+  },
+  {
+      "name": "Northern Flicker",
+      "query": "colaptes auratus"
+  },
+  {
+      "name": "Red-eyed Vireo",
+      "query": "vireo olivaceus"
+  },
+  {
+      "name": "American Kestrel",
+      "query": "falco sparverius"
+  },
+  {
+      "name": "Killdeer",
+      "query": "charadrius vociferus"
+  },
+  {
+      "name": "Eastern Phoebe",
+      "query": "sayornis phoebe"
+  },
+  {
+      "name": "Tree Swallow",
+      "query": "tachycineta bicolor"
+  },
+  {
+      "name": "Barn Swallow",
+      "query": "hirundo rustica"
+  },
+  {
+      "name": "Cedar Waxwing",
+      "query": "bombycilla cedrorum"
+  },
+  {
+      "name": "American Redstart",
+      "query": "setophaga ruticilla"
+  },
+  {
+      "name": "Yellow Warbler",
+      "query": "setophaga petechia"
+  },
+  {
+      "name": "Indigo Bunting",
+      "query": "passerina cyanea"
+  },
+  {
+      "name": "Eastern Towhee",
+      "query": "pipilo erythrophthalmus"
+  },
+  {
+      "name": "Ring-billed Gull",
+      "query": "larus delawarensis"
+  },
+  {
+      "name": "Ruby-throated Hummingbird",
+      "query": "archilochus colubris"
+  },
+  {
+      "name": "Blue-gray Gnatcatcher",
+      "query": "polioptila caerulea"
+  },
+  {
+      "name": "Baltimore Oriole",
+      "query": "icterus galbula"
+  }
+]

@@ -29,9 +29,9 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 # Configuration
 class Config:
-    MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "checkpoints_94", "best_model.keras")
-    SPECIES_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "species.json")
-    YAMNET_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "yamnet")
+    MODEL_PATH = os.path.join(os.path.dirname(__file__), "best_model.keras")
+    SPECIES_PATH = os.path.join(os.path.dirname(__file__), "species.json")
+    YAMNET_PATH = os.path.join(os.path.dirname(__file__), "yamnet")
     
     SAMPLE_RATE = 16000
     SEGMENT_DURATION = 5
@@ -420,9 +420,12 @@ if __name__ == '__main__':
         print("   POST /predict_url - Predict from audio URL")
         print("")
         
+        # For Render deployment, use the PORT environment variable
+        port = int(os.environ.get('PORT', 5000))
+        
         app.run(
             host='0.0.0.0',
-            port=int(os.environ.get('PORT', 5000)),
+            port=port,
             debug=os.environ.get('FLASK_ENV') == 'development'
         )
     else:
