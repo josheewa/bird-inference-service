@@ -430,4 +430,11 @@ if __name__ == '__main__':
         )
     else:
         print("❌ Failed to initialize app")
-        sys.exit(1) 
+        sys.exit(1)
+
+# Auto-initialize for production deployment (Gunicorn)
+else:
+    print("🔄 Initializing app for production...")
+    if not initialize_app():
+        print("❌ Failed to initialize app for production")
+        raise RuntimeError("Model initialization failed") 
