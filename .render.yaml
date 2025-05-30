@@ -3,8 +3,8 @@ services:
     name: bird-inference-service
     env: python
     plan: free
-    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --timeout 300 --worker-class sync --max-requests 1000 --max-requests-jitter 50 --preload
+    buildCommand: pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --timeout 600 --worker-class sync --max-requests 100 --max-requests-jitter 10 --preload --worker-tmp-dir /dev/shm
     envVars:
       - key: PYTHONPATH
         value: /opt/render/project/src
@@ -12,6 +12,10 @@ services:
         value: "2"
       - key: DEMO_MODE
         value: "false"
+      - key: TF_FORCE_GPU_ALLOW_GROWTH
+        value: "true"
+      - key: TF_ENABLE_ONEDNN_OPTS
+        value: "0"
     buildFilter:
       paths:
       - requirements.txt
@@ -19,6 +23,8 @@ services:
       - yamnet/**
       - best_model.keras
       - species.json
+      - runtime.txt
+      - .render.yaml
       ignoredPaths:
       - README.md
       - deploy.md
