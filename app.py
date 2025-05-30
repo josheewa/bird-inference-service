@@ -5,7 +5,7 @@ Bird Sound Classification API Service
 A Flask-based REST API for bird sound classification using the trained model.
 Designed to be deployed and queried from external applications.
 
-Version: 2.1.3 - Fixed TensorFlow version compatibility for policy_scope
+Version: 2.1.4 - Added demo mode and enhanced debugging for weight loading issues
 """
 
 import os
@@ -25,7 +25,7 @@ from werkzeug.utils import secure_filename
 import warnings
 
 # Print version info for deployment tracking
-API_VERSION = "2.1.3"
+API_VERSION = "2.1.4"
 print(f"🚀 Bird Sound Classification API v{API_VERSION}")
 print(f"📅 Deployment timestamp: {time.strftime('%Y-%m-%d %H:%M:%S UTC')}")
 
@@ -71,6 +71,9 @@ class Config:
     
     # API Configuration
     MAX_CONFIDENCE_RESULTS = 5  # Return top 5 predictions
+    
+    # Demo mode - allows API to function with random weights for testing
+    DEMO_MODE = os.environ.get('DEMO_MODE', 'false').lower() == 'true'
 
 # Add YAMNet to path
 sys.path.insert(0, Config.YAMNET_PATH)
@@ -355,7 +358,58 @@ def load_model():
         model = None
         model_weights_ok = False
     
-    # Strategy 4: Emergency fallback - create a functioning model with random weights
+    # Strategy 4: Aggressive fallback - try to extract weights differently
+    print("🔄 Strategy 4: Aggressive weight extraction...")
+    try:
+        tf.keras.backend.clear_session()
+        
+        with safe_policy_context():
+            # Create model without trying to load saved model
+            yamnet_weights_path = os.path.join(Config.YAMNET_PATH, "yamnet.h5")
+            model = BirdClassifier(
+                num_classes=50,
+                yamnet_weights_path_arg=yamnet_weights_path,
+                yamnet_trainable=False
+            )
+            
+            # Build the model
+            dummy_input = tf.zeros((1, Config.EXPECTED_SAMPLES))
+            _ = model(dummy_input, training=False)
+            
+            print("   ✅ Created fresh model instance")
+            
+            # Try to load weights using h5py directly if possible
+            try:
+                import h5py
+                print("   🔄 Attempting direct H5 weight extraction...")
+                
+                with h5py.File(Config.MODEL_PATH, 'r') as f:
+                    print(f"   📊 H5 file keys: {list(f.keys())}")
+                    
+                    # Look for weight data in the file
+                    if 'model_weights' in f:
+                        print("   Found model_weights group")
+                        weights_group = f['model_weights']
+                        print(f"   Weight groups: {list(weights_group.keys())}")
+                    
+                    # This is a more complex extraction that would need model-specific implementation
+                    print("   ⚠️ Direct H5 extraction needs model-specific implementation")
+                    
+            except Exception as h5_error:
+                print(f"   ❌ H5 direct extraction failed: {h5_error}")
+            
+            print("   🔄 Using model with YAMNet pretrained weights only...")
+            print("   ⚠️ Custom layers will have random weights")
+            model_weights_ok = False  # YAMNet weights loaded, but not custom layers
+            
+            return True
+            
+    except Exception as e:
+        print(f"❌ Aggressive fallback failed: {e}")
+        model = None
+        model_weights_ok = False
+    
+    # Strategy 5: Emergency fallback - create a functioning model with random weights
     print("🔄 Emergency fallback: Creating model with random weights...")
     try:
         tf.keras.backend.clear_session()
@@ -468,7 +522,10 @@ def health():
         'status': 'healthy',
         'model_loaded': model is not None,
         'model_weights_ok': model_weights_ok,
+        'demo_mode': Config.DEMO_MODE,
         'species_count': len(species_list),
+        'tensorflow_version': tf.__version__,
+        'policy_scope_available': HAS_POLICY_SCOPE,
         'timestamp': time.time()
     })
 
@@ -492,10 +549,14 @@ def predict():
         
         # Check if model weights are properly loaded
         if not model_weights_ok:
-            return jsonify({
-                'error': 'Model weights not loaded properly - predictions would be random',
-                'details': 'The model structure exists but weights were not loaded successfully'
-            }), 500
+            if Config.DEMO_MODE:
+                print("⚠️ Demo mode: Proceeding with unloaded weights - predictions will be random")
+            else:
+                return jsonify({
+                    'error': 'Model weights not loaded properly - predictions would be random',
+                    'details': 'The model structure exists but weights were not loaded successfully',
+                    'suggestion': 'Set DEMO_MODE=true environment variable to test with random predictions'
+                }), 500
         
         # Check if file was uploaded
         if 'audio' not in request.files:
@@ -551,7 +612,7 @@ def predict():
         # Calculate processing time
         processing_time = time.time() - start_time
         
-        return jsonify({
+        response_data = {
             'success': True,
             'predictions': predictions,
             'processing_time_seconds': round(processing_time, 3),
@@ -559,7 +620,13 @@ def predict():
                 'filename': secure_filename(file.filename),
                 'size_bytes': file_size
             }
-        })
+        }
+        
+        # Add warning if using demo mode with unloaded weights
+        if not model_weights_ok and Config.DEMO_MODE:
+            response_data['warning'] = 'DEMO MODE: Predictions are random - model weights not loaded properly'
+        
+        return jsonify(response_data)
     
     except Exception as e:
         print(f"Prediction error: {e}")
@@ -578,10 +645,14 @@ def predict_url():
         
         # Check if model weights are properly loaded
         if not model_weights_ok:
-            return jsonify({
-                'error': 'Model weights not loaded properly - predictions would be random',
-                'details': 'The model structure exists but weights were not loaded successfully'
-            }), 500
+            if Config.DEMO_MODE:
+                print("⚠️ Demo mode: Proceeding with unloaded weights - predictions will be random")
+            else:
+                return jsonify({
+                    'error': 'Model weights not loaded properly - predictions would be random',
+                    'details': 'The model structure exists but weights were not loaded successfully',
+                    'suggestion': 'Set DEMO_MODE=true environment variable to test with random predictions'
+                }), 500
         
         data = request.get_json()
         if not data or 'url' not in data:
@@ -631,7 +702,8 @@ def predict_url():
         return jsonify({
             'success': True,
             'predictions': predictions,
-            'url': url
+            'url': url,
+            'warning': 'DEMO MODE: Predictions are random - model weights not loaded properly' if (not model_weights_ok and Config.DEMO_MODE) else None
         })
     
     except Exception as e:
